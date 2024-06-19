@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Tracker": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

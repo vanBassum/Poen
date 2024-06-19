@@ -15,7 +15,6 @@ namespace Tracker.Services
         private readonly Wallets _wallets;
         private readonly Tokens _tokens;
         private readonly ConversionRateService _conversionRateService;
-        //private readonly DatabaseService _databaseService;
 
         public ApplicationService(TransactionService transactionService, IOptions<Wallets> wallets, IOptions<Tokens> tokens, ConversionRateService conversionRateService)
         {
@@ -23,7 +22,6 @@ namespace Tracker.Services
             _wallets = wallets.Value;
             _tokens = tokens.Value;
             _conversionRateService = conversionRateService;
-            //_databaseService = databaseService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,6 +41,7 @@ namespace Tracker.Services
 
             const int nameMaxLength = 30;
             const int symbolMaxLength = 20;
+            decimal totalUsd = 0;
 
             Console.WriteLine("Token Balances:");
             Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20} {3,20}", "Token Name", "Symbol", "Balance", "Usd"));
@@ -57,7 +56,20 @@ namespace Tracker.Services
                     ClipString(token.Token.Symbol, symbolMaxLength),
                     token.Value,
                     usdValue));
+
+                totalUsd += token.UsdValue ?? 0;
             }
+
+            Console.WriteLine("");
+            Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20:N4} {3,20:N4}",
+                "",
+                "",
+                "",
+                totalUsd));
+            Console.WriteLine("");
+
+
+            return;
 
             Console.WriteLine("\nTransactions:");
             Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20}", "Token Name", "Symbol", "Amount"));

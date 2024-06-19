@@ -1,14 +1,11 @@
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using System.Collections.Generic;
-using Tracker.Services.ConversionRates;
+﻿using Tracker.Services.ConversionRates;
 using Tracker.Services;
 using Tracker.Services.BinanceSmartChain;
 using Tracker.Services.Transactions;
 using Tracker.Services.CoinMarketCap;
 using Tracker.Services.Manual;
-using Tracker.Services.BlockChain;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 

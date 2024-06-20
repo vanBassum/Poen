@@ -5,6 +5,7 @@ namespace Poen.Config
     {
         public string? Wallet { get; set; }
         public List<string> TokenBlacklist { get; set; } = new List<string>();
+        public int ScanInterval { get; set; } = 300;
     }
 }
 

@@ -35,7 +35,7 @@ namespace Poen.Services
                 if (_applicationConfig.Wallet == null)
                     throw new Exception("No wallet configured");
                 await HandleWalletBsc(_applicationConfig.Wallet);
-                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(_applicationConfig.ScanInterval), stoppingToken);
             }
         }
 

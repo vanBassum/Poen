@@ -1,9 +1,10 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using InfluxDB.Client.Api.Domain;
+using InfluxDB.Client.Writes;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Tracker.Services.Transactions;
-using System.Linq;
 using Tracker.Models;
 using Tracker.Services.ConversionRates;
+using Tracker.Services.Transactions;
 
 
 
@@ -15,13 +16,15 @@ namespace Tracker.Services
         private readonly Wallets _wallets;
         private readonly Tokens _tokens;
         private readonly ConversionRateService _conversionRateService;
+        private readonly InfluxDBService _influxDBService;
 
-        public ApplicationService(TransactionService transactionService, IOptions<Wallets> wallets, IOptions<Tokens> tokens, ConversionRateService conversionRateService)
+        public ApplicationService(TransactionService transactionService, IOptions<Wallets> wallets, IOptions<Tokens> tokens, ConversionRateService conversionRateService, InfluxDBService influxDBService)
         {
             _transactionService = transactionService;
             _wallets = wallets.Value;
             _tokens = tokens.Value;
             _conversionRateService = conversionRateService;
+            _influxDBService = influxDBService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -30,34 +33,54 @@ namespace Tracker.Services
             {
                 foreach (var wallet in _wallets.Bsc)
                     await HandleWalletBsc(wallet);
-                await Task.Delay(TimeSpan.FromMinutes(60), stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
         }
 
         private async Task HandleWalletBsc(string wallet)
         {
             var transactions = await _transactionService.GetTransactionsForAddressAsync(wallet);
-            var balances = await CalculateBalance(wallet, transactions);
+            var portofolio = CalculatePortofolio(wallet, transactions);
 
             const int nameMaxLength = 30;
             const int symbolMaxLength = 20;
             decimal totalUsd = 0;
 
+            var usdToken = new Token { Contract = "", Name = "Dollar", Symbol = "USD" };
+            var rates = await GetRatesForPortofolio(portofolio, usdToken);
+
             Console.WriteLine("Token Balances:");
             Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20} {3,20}", "Token Name", "Symbol", "Balance", "Usd"));
             Console.WriteLine(new string('-', 90)); // Adjusted separator line length for better formatting
 
-            foreach (var token in balances.OrderByDescending(a=>a.UsdValue))
+            foreach (var balance in portofolio.OrderBy(a => a.Token.Symbol))
             {
-                var usdValue = token.UsdValue.HasValue ? token.UsdValue.Value.ToString("N4") : " ";
+                var rate = rates.FirstOrDefault(r => r.FromToken == balance.Token && r.ToToken == usdToken);
+                decimal? usdValue = rate?.Price == null ? null : rate.Price * balance.Value;
+                var usdValueString = usdValue.HasValue ? usdValue.Value.ToString("N4") : " ";
 
                 Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20:N4} {3,20:N4}",
-                    ClipString(token.Token.Name, nameMaxLength),
-                    ClipString(token.Token.Symbol, symbolMaxLength),
-                    token.Value,
-                    usdValue));
+                    ClipString(balance.Token.Name, nameMaxLength),
+                    ClipString(balance.Token.Symbol, symbolMaxLength),
+                    balance.Value,
+                    usdValueString));
 
-                totalUsd += token.UsdValue ?? 0;
+                totalUsd += usdValue ?? 0;
+
+                _influxDBService.Write(details =>
+                {
+                    var point = PointData
+                        .Measurement("Portofolio")
+                        .Tag("Wallet", wallet)
+                        .Tag("TokenSymbol", balance.Token.Symbol)
+                        .Tag("TokenName", balance.Token.Name)
+                        .Tag("TokenContract", balance.Token.Contract)
+                        .Field("Value", balance.Value)
+                        .Field("Usd", usdValue)
+                        .Timestamp(DateTime.UtcNow, WritePrecision.Ns);
+
+                    details.Api.WritePoint(point, details.Bucket, details.Organisation);
+                });
             }
 
             Console.WriteLine("");
@@ -67,8 +90,6 @@ namespace Tracker.Services
                 "",
                 totalUsd));
             Console.WriteLine("");
-
-
             return;
 
             Console.WriteLine("\nTransactions:");
@@ -94,9 +115,9 @@ namespace Tracker.Services
             return input.Length > maxLength ? input.Substring(0, maxLength) : input;
         }
 
-        private async Task<List<DiplayBalance>> CalculateBalance(string wallet, IEnumerable<Transaction> transactions)
+        private List<TokenBalance> CalculatePortofolio(string wallet, IEnumerable<Transaction> transactions)
         {
-            List<DiplayBalance> tokenBalances = new List<DiplayBalance>();
+            List<TokenBalance> tokenBalances = new List<TokenBalance>();
 
             foreach (var transaction in transactions)
             {
@@ -108,18 +129,17 @@ namespace Tracker.Services
 
                 if (_tokens.Blacklist.Length > 0)
                 {
-                    if (_tokens.Blacklist.Any(a=> transaction.Token.Symbol.StartsWith(a)))
+                    if (_tokens.Blacklist.Any(a => transaction.Token.Symbol.StartsWith(a)))
                         continue;
                 }
 
-                DiplayBalance? tokenBalance = tokenBalances.FirstOrDefault(b => b.Token == transaction.Token);
+                TokenBalance? tokenBalance = tokenBalances.FirstOrDefault(b => b.Token == transaction.Token);
                 if (tokenBalance == null)
                 {
-                    tokenBalance = new DiplayBalance
+                    tokenBalance = new TokenBalance
                     {
                         Token = transaction.Token,
-                        Value = 0,
-                        UsdValue = null
+                        Value = 0
                     };
                     tokenBalances.Add(tokenBalance);
                 }
@@ -135,41 +155,35 @@ namespace Tracker.Services
                     tokenBalance.Value += transaction.Value;
                 }
             }
-
-            foreach (var balance in tokenBalances)
-                await CalculateUsd(balance);
-
             return tokenBalances;
         }
 
-
-
-        private async Task CalculateUsd(DiplayBalance balance)
+        async Task<List<ConversionRate>> GetRatesForPortofolio(List<TokenBalance> portofolio, Token toToken)
         {
-            Token usdToken = new Token { 
-                Contract = "",
-                Name = "Dollar",
-                Symbol = "USD"
-            };
-            var rate = await _conversionRateService.GetConversionRateAsync(balance.Token, usdToken);
+            List<ConversionRate> rates = new List<ConversionRate>();
 
-            if (rate == null)
-                return;
+            foreach (var tokenBalance in portofolio)
+            {
+                rates.Add(new ConversionRate
+                {
+                    FromToken = tokenBalance.Token,
+                    ToToken = toToken
+                });
+            }
 
-            balance.UsdValue = rate.Rate * balance.Value;
+            await _conversionRateService.UpdateConversionRates(rates);
+            return rates;
         }
     }
 
-    class DiplayBalance
-    { 
+    class TokenBalance
+    {
         public required Token Token { get; set; }
         public decimal? Value { get; set; }
-        public decimal? UsdValue { get; set; }
-
-        public override string ToString() => $"{Token.Symbol} {UsdValue?.ToString("D2") ?? "n/a"}";
+        public override string ToString() => $"{Token.Symbol}";
     }
-
-
 }
+
+
 
 

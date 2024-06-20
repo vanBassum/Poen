@@ -13,5 +13,7 @@
         public int MarketCapDominance { get; set; }
         public decimal FullyDilutedMarketCap { get; set; }
         public DateTime LastUpdated { get; set; }
+
+        public override string ToString() => $"{Price}";
     }
 }

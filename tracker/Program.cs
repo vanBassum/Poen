@@ -14,10 +14,12 @@ HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 builder.Services.Configure<ApiKeys>(builder.Configuration.GetSection("ApiKeys"));
 builder.Services.Configure<Wallets>(builder.Configuration.GetSection("Wallets"));
 builder.Services.Configure<Tokens>(builder.Configuration.GetSection("Tokens"));
+builder.Services.Configure<InfluxDb>(builder.Configuration.GetSection("InfluxDb"));
 
 // Add HttpClient to the DI container
 builder.Services.AddHttpClient();
 
+builder.Services.AddSingleton<InfluxDBService>();
 builder.Services.AddSingleton<TransactionService>();
 builder.Services.AddSingleton<ConversionRateService>();
 builder.Services.AddHostedService<ApplicationService>();
@@ -34,8 +36,8 @@ builder.Services.AddBlockChainTransactionProvider((provider, config) => {
     config.BaseUrl = "https://api.bscscan.com/api";
 });
 
-builder.Services.AddTransient<IConversionRateProvider, CoinMarketCapConversionProvider>();
-builder.Services.AddTransient<IConversionRateProvider, USDTConversionProvider>();
+builder.Services.AddTransient<IConversionRateProvider, CoinMarketCapRateProvider>();
+builder.Services.AddTransient<IConversionRateProvider, LookupConversionProvider>();
 
 using IHost host = builder.Build();
 

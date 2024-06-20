@@ -20,5 +20,7 @@
         public object? SelfReportedCirculatingSupply { get; set; }
         public object? SelfReportedMarketCap { get; set; }
         public Dictionary<string, Quote>? Quote { get; set; }
+
+        public override string ToString() => $"{Symbol}";
     }
 }

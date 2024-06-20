@@ -2,11 +2,7 @@ name: CI/CD to Docker Hub
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
   tags:
     - v[0-9]+.[0-9]+.[0-9]+  # Trigger on version tags like v1.0.0
 

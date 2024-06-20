@@ -1,5 +1,6 @@
 ﻿using InfluxDB.Client.Api.Domain;
 using InfluxDB.Client.Writes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Poen.Models;
@@ -15,24 +16,41 @@ namespace Poen.Services
         private readonly Tokens _tokens;
         private readonly ConversionRateService _conversionRateService;
         private readonly InfluxDBService _influxDBService;
+        private readonly IConfiguration _configuration;
 
-        public ApplicationService(TransactionService transactionService, IOptions<Wallets> wallets, IOptions<Tokens> tokens, ConversionRateService conversionRateService, InfluxDBService influxDBService)
+        public ApplicationService(TransactionService transactionService, IOptions<Wallets> wallets, IOptions<Tokens> tokens, ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration)
         {
             _transactionService = transactionService;
             _wallets = wallets.Value;
             _tokens = tokens.Value;
             _conversionRateService = conversionRateService;
             _influxDBService = influxDBService;
+            _configuration = configuration;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            PrintConfig();
             while (!stoppingToken.IsCancellationRequested)
             {
                 foreach (var wallet in _wallets.Bsc)
                     await HandleWalletBsc(wallet);
                 await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
+        }
+
+
+        void PrintConfig()
+        {
+            Console.WriteLine("Configuration Settings:");
+            Console.WriteLine("-----------------------");
+
+            foreach (var kvp in _configuration.AsEnumerable())
+            {
+                Console.WriteLine($"{kvp.Key}: {kvp.Value}");
+            }
+
+            Console.WriteLine();
         }
 
         private async Task HandleWalletBsc(string wallet)

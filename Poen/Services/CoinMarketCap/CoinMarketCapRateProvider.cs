@@ -1,9 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
+using Poen.Config;
 using Poen.Models;
 using Poen.Services.ConversionRates;
-using System.Drawing;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Web;
@@ -13,16 +11,19 @@ namespace Poen.Services.CoinMarketCap
     public class CoinMarketCapRateProvider : IConversionRateProvider
     {
         private readonly HttpClient _httpClient;
-        private readonly ApiKeys _apiKeys;
-
-        public CoinMarketCapRateProvider(HttpClient httpClient, IOptions<ApiKeys> apiKeys)
+        private readonly CoinMarketCapConfig _config;
+        private DateTime lastFetched = DateTime.MinValue;
+        public CoinMarketCapRateProvider(HttpClient httpClient, IOptions<CoinMarketCapConfig> config)
         {
             _httpClient = httpClient;
-            _apiKeys = apiKeys.Value;
+            _config = config.Value;
         }
 
         public async Task UpdateConversionRates(List<ConversionRate> rates)
         {
+            if (DateTime.Now - lastFetched < TimeSpan.FromSeconds(_config.RateLimit))
+                return;
+
             var response = await RequestData(rates);
 
             foreach (var rate in rates)
@@ -39,6 +40,8 @@ namespace Poen.Services.CoinMarketCap
                 rate.LastUpdated = DateTime.UtcNow;
                 rate.Price = quote.Price;
             }
+
+            lastFetched = DateTime.Now;
         }
 
         HttpRequestMessage? BuildRequest(List<ConversionRate> rates)
@@ -59,7 +62,10 @@ namespace Poen.Services.CoinMarketCap
 
             URL.Query = queryBuilder.ToString();
             var request = new HttpRequestMessage(HttpMethod.Get, URL.ToString());
-            request.Headers.Add("X-CMC_PRO_API_KEY", _apiKeys.CoinMarketCap);
+            if (_config.ApiKey == null)
+                throw new Exception("_config.ApiKey cant be null");
+
+            request.Headers.Add("X-CMC_PRO_API_KEY", _config.ApiKey);
 
             return request;
         }

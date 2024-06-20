@@ -1,19 +1,20 @@
-﻿using Microsoft.Extensions.Options;
-using Poen.Models;
+﻿using Poen.Models;
 using Poen.Services.Transactions;
 using System.Text.Json;
 
 namespace Poen.Services.BlockChain
 {
-    public class BlockchainTransactionProvider : ITransactionProvider
+    public class BlockchainTransactionProvider
     {
         private readonly HttpClient _httpClient;
-        private readonly BlockChainTransactionProviderConfig _config;
+        private readonly string _baseUrl;
+        private readonly string _apiKey;
 
-        public BlockchainTransactionProvider(HttpClient httpClient, BlockChainTransactionProviderConfig config)
+        public BlockchainTransactionProvider(HttpClient httpClient, string baseUrl, string apiKey)
         {
             _httpClient = httpClient;
-            _config = config;
+            _apiKey = apiKey;
+            _baseUrl = baseUrl;
         }
 
         public async Task<List<Transaction>> GetTransactionsAsync(string walletAddress)
@@ -37,7 +38,7 @@ namespace Poen.Services.BlockChain
 
         private string GetApiUrl(string walletAddress)
         {
-            return $"{_config.BaseUrl}?module=account&action=tokentx&address={walletAddress}&startblock=0&endblock=99999999&sort=asc&apikey={_config.ApiKey}";
+            return $"{_baseUrl}?module=account&action=tokentx&address={walletAddress}&startblock=0&endblock=99999999&sort=asc&apikey={_apiKey}";
         }
 
 
@@ -79,7 +80,6 @@ namespace Poen.Services.BlockChain
                 : defaultValue;
         }
     }
-
 
 }
 

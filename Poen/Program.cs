@@ -7,38 +7,29 @@ using Poen.Services.Manual;
 using Poen.Services.BlockChain;
 using Poen.Services.Transactions;
 using Poen.Services.CoinMarketCap;
+using Poen.Config;
+using System;
 
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.Configure<ApiKeys>(builder.Configuration.GetSection("ApiKeys"));
-builder.Services.Configure<Wallets>(builder.Configuration.GetSection("Wallets"));
-builder.Services.Configure<Tokens>(builder.Configuration.GetSection("Tokens"));
-builder.Services.Configure<InfluxDb>(builder.Configuration.GetSection("InfluxDb"));
+builder.Services.Configure<ApplicationConfig>(builder.Configuration.GetSection("Application"));
+builder.Services.Configure<BlockChainSettings>(builder.Configuration.GetSection("BlockChain"));
+builder.Services.Configure<CoinMarketCapConfig>(builder.Configuration.GetSection("CoinMarketCap"));
+builder.Services.Configure<InfluxDbConfig>(builder.Configuration.GetSection("InfluxDb"));
+
 
 // Add HttpClient to the DI container
 builder.Services.AddHttpClient();
-
 builder.Services.AddSingleton<InfluxDBService>();
 builder.Services.AddSingleton<TransactionService>();
 builder.Services.AddSingleton<ConversionRateService>();
 builder.Services.AddHostedService<ApplicationService>();
 
-builder.Services.AddBlockChainTransactionProvider((provider, config) => {
-    var apiKeys = provider.GetRequiredService<IOptions<ApiKeys>>();
-    config.ApiKey = apiKeys.Value.Etherscan;
-    config.BaseUrl = "https://api.etherscan.io/api";
-});
-
-builder.Services.AddBlockChainTransactionProvider((provider, config) => {
-    var apiKeys = provider.GetRequiredService<IOptions<ApiKeys>>();
-    config.ApiKey = apiKeys.Value.Bscscan;
-    config.BaseUrl = "https://api.bscscan.com/api";
-});
-
+builder.Services.AddTransient<ITransactionProvider, BlockChainTransactionService>();
 builder.Services.AddTransient<IConversionRateProvider, CoinMarketCapRateProvider>();
 builder.Services.AddTransient<IConversionRateProvider, LookupConversionProvider>();
 
-using IHost host = builder.Build();
 
+using IHost host = builder.Build();
 await host.RunAsync();

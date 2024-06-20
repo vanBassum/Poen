@@ -3,6 +3,7 @@ using InfluxDB.Client.Writes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Poen.Config;
 using Poen.Models;
 using Poen.Services.ConversionRates;
 using Poen.Services.Transactions;
@@ -12,20 +13,18 @@ namespace Poen.Services
     public class ApplicationService : BackgroundService
     {
         private readonly TransactionService _transactionService;
-        private readonly Wallets _wallets;
-        private readonly Tokens _tokens;
+        private readonly ApplicationConfig _applicationConfig;
         private readonly ConversionRateService _conversionRateService;
         private readonly InfluxDBService _influxDBService;
         private readonly IConfiguration _configuration;
 
-        public ApplicationService(TransactionService transactionService, IOptions<Wallets> wallets, IOptions<Tokens> tokens, ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration)
+        public ApplicationService(TransactionService transactionService, ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration, IOptions<ApplicationConfig> applicationConfig)
         {
             _transactionService = transactionService;
-            _wallets = wallets.Value;
-            _tokens = tokens.Value;
             _conversionRateService = conversionRateService;
             _influxDBService = influxDBService;
             _configuration = configuration;
+            _applicationConfig = applicationConfig.Value;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -33,8 +32,9 @@ namespace Poen.Services
             PrintConfig();
             while (!stoppingToken.IsCancellationRequested)
             {
-                foreach (var wallet in _wallets.Bsc)
-                    await HandleWalletBsc(wallet);
+                if (_applicationConfig.Wallet == null)
+                    throw new Exception("No wallet configured");
+                await HandleWalletBsc(_applicationConfig.Wallet);
                 await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
         }
@@ -137,17 +137,8 @@ namespace Poen.Services
 
             foreach (var transaction in transactions)
             {
-                if (_tokens.Whitelist.Length > 0)
-                {
-                    if (!_tokens.Whitelist.Contains(transaction.Token.Symbol))
+                if (_applicationConfig.TokenBlacklist?.Any(a => transaction.Token.Symbol.StartsWith(a)) ?? false)
                         continue;
-                }
-
-                if (_tokens.Blacklist.Length > 0)
-                {
-                    if (_tokens.Blacklist.Any(a => transaction.Token.Symbol.StartsWith(a)))
-                        continue;
-                }
 
                 TokenBalance? tokenBalance = tokenBalances.FirstOrDefault(b => b.Token == transaction.Token);
                 if (tokenBalance == null)

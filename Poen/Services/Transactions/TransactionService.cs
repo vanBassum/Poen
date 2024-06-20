@@ -1,7 +1,4 @@
-﻿
-
-
-using Poen.Models;
+﻿using Poen.Models;
 using System.Text.Json;
 
 namespace Poen.Services.Transactions
@@ -27,8 +24,6 @@ namespace Poen.Services.Transactions
             return transactions;
         }
     }
-
-
 }
 
 

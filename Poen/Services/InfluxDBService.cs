@@ -1,7 +1,6 @@
 ﻿using InfluxDB.Client;
-using InfluxDB.Client.Api.Client;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Poen.Config;
 
 
 
@@ -9,16 +8,29 @@ namespace Poen.Services
 {
     public class InfluxDBService
     {
-        private readonly InfluxDb _settings;
+        private readonly InfluxDbConfig _settings;
 
-        public InfluxDBService(IOptions<InfluxDb> settings)
+        public InfluxDBService(IOptions<InfluxDbConfig> settings)
         {
             _settings = settings.Value;
         }
 
         public void Write(Action<InfluxWriteDetails> action)
         {
+            if (string.IsNullOrEmpty(_settings.ApiKey))
+                throw new Exception("InfluxDb ApiKey not set");
+
+            if (string.IsNullOrEmpty(_settings.Bucket))
+                throw new Exception("InfluxDb Bucket not set");
+
+            if (string.IsNullOrEmpty(_settings.Endpoint))
+                throw new Exception("InfluxDb Endpoint not set");
+
+            if (string.IsNullOrEmpty(_settings.Organisation))
+                throw new Exception("InfluxDb Organisation not set");
+
             using var client = InfluxDBClientFactory.Create(_settings.Endpoint, _settings.ApiKey);
+
             InfluxWriteDetails details = new InfluxWriteDetails
             {
                 Api = client.GetWriteApi(),

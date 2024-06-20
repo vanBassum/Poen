@@ -45,7 +45,8 @@ jobs:
     - name: Build and Push Docker image
       uses: docker/build-push-action@v2
       with:
-        context: ./Poen  # Specify the context directory where your Dockerfile is located
+        context: .              # Specify the context directory where your Dockerfile is located
+        file: ./Poen/Dockerfile # Specify the path to your Dockerfile
         push: true
         tags: |
           ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest

@@ -3,8 +3,6 @@ name: CI/CD to Docker Hub
 on:
   push:
     branches: [ "main" ]
-  tags:
-    - 'v*.*.*'  # Trigger on version tags like v1.0.0
 
 env:
   DOCKERHUB_USERNAME: vanbassum

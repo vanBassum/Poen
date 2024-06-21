@@ -1,6 +1,6 @@
 ﻿using Poen.Models;
 
-namespace Poen.Services.ConversionRates
+namespace Poen.Services
 {
     public interface IConversionRateProvider
     {

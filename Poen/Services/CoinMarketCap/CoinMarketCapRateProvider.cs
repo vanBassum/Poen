@@ -2,12 +2,10 @@
 using Microsoft.Extensions.Options;
 using Poen.Config;
 using Poen.Models;
-using Poen.Services.ConversionRates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Web;
-using Poen.Services;
 
 namespace Poen.Services.CoinMarketCap
 {

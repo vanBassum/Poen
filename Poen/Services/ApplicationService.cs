@@ -7,8 +7,6 @@ using Microsoft.Extensions.Options;
 using Poen.Config;
 using Poen.Models;
 using Poen.Services.CoinMarketCap;
-using Poen.Services.ConversionRates;
-using Poen.Services.Transactions;
 using System;
 using System.Text;
 
@@ -16,35 +14,70 @@ namespace Poen.Services
 {
     public class ApplicationService : BackgroundService
     {
-        private readonly TransactionService _transactionService;
+        private readonly IPortofolioProvider _portofolioProvider;
         private readonly ApplicationConfig _applicationConfig;
         private readonly ConversionRateService _conversionRateService;
         private readonly InfluxDBService _influxDBService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<ApplicationService> _logger;
 
-        public ApplicationService(TransactionService transactionService, ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration, IOptions<ApplicationConfig> applicationConfig, ILogger<ApplicationService> logger)
+        public ApplicationService(ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration, IOptions<ApplicationConfig> applicationConfig, ILogger<ApplicationService> logger, IPortofolioProvider portofolioProvider)
         {
-            _transactionService = transactionService;
             _conversionRateService = conversionRateService;
             _influxDBService = influxDBService;
             _configuration = configuration;
             _applicationConfig = applicationConfig.Value;
             _logger = logger;
+            _portofolioProvider = portofolioProvider;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             PrintConfig();
+
+            var portofolios = CreatePortofolios().ToList();
+
             while (!stoppingToken.IsCancellationRequested)
             {
-                if (_applicationConfig.Wallet == null)
-                    throw new Exception("No wallet configured");
-                await HandleWalletBsc(_applicationConfig.Wallet);
+                await UpdatePortofolios(portofolios);
                 await Task.Delay(TimeSpan.FromSeconds(_applicationConfig.ScanInterval), stoppingToken);
             }
         }
 
+        IEnumerable<Portofolio> CreatePortofolios()
+        {
+            foreach(var wallet in _applicationConfig.Wallets)
+            {
+                var porto = new Portofolio
+                {
+                    Address = wallet.Address ?? throw new Exception()
+                };
+
+                foreach(var token in wallet.Tokens)
+                {
+                    porto.Balances.Add(new TokenBalance { 
+                        Token = new()
+                        { 
+                            Contract = token.Contract ?? throw new Exception(),
+                            DecimalPlace = token.DecimalPlace ?? throw new Exception(),
+                            Name = token.Name ?? throw new Exception(),
+                            Symbol = token.Symbol ?? throw new Exception(),
+                        },
+                        Balance = 0
+                    });
+                }
+                yield return porto;
+            }
+        }
+
+
+        async Task UpdatePortofolios(List<Portofolio> portofolios)
+        {
+            foreach(var portofolio in portofolios)
+            {
+                await _portofolioProvider.UpdateBalances(portofolio);
+            }
+        }
 
         void PrintConfig()
         {
@@ -60,9 +93,30 @@ namespace Poen.Services
             _logger.LogInformation(logMessage.ToString());
         }
 
-        private async Task HandleWalletBsc(string wallet)
+
+
+
+        /*
+        private Portofolio GetPortofolio(string walletAddress)
         {
-            var transactions = await _transactionService.GetTransactionsForAddressAsync(wallet);
+
+        }
+
+        private async Task HandlePortofolio(Portofolio portofolio)
+        {
+
+            foreach (var token in _applicationConfig.Tokens)
+            {
+                portofolio.Add(new TokenBalance 
+                { 
+                    
+                });
+            }
+
+            await _portofolioProvider.UpdateBalances(portofolio, wallet);
+
+
+
             var portofolio = CalculatePortofolio(wallet, transactions);
 
             const int nameMaxLength = 30;
@@ -127,7 +181,6 @@ namespace Poen.Services
             {
                 if (_applicationConfig.TokenBlacklist?.Any(a => transaction.Token.Symbol.StartsWith(a)) ?? false)
                         continue;
-
                 TokenBalance? tokenBalance = tokenBalances.FirstOrDefault(b => b.Token == transaction.Token);
                 if (tokenBalance == null)
                 {
@@ -169,13 +222,8 @@ namespace Poen.Services
             await _conversionRateService.UpdateConversionRates(rates);
             return rates;
         }
-    }
 
-    class TokenBalance
-    {
-        public required Token Token { get; set; }
-        public decimal? Value { get; set; }
-        public override string ToString() => $"{Token.Symbol}";
+        */
     }
 }
 

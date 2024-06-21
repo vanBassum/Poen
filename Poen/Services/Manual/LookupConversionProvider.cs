@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Options;
 using Poen.Models;
-using Poen.Services.ConversionRates;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;

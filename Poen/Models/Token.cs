@@ -5,6 +5,7 @@
         public required string Name { get; set; }
         public required string Symbol { get; set; }
         public required string Contract { get; set; }
+        public required int DecimalPlace { get; set; }
 
         public override string ToString() => $"{Symbol}";
 
@@ -25,4 +26,5 @@
             return Symbol?.GetHashCode(StringComparison.OrdinalIgnoreCase) ?? 0;
         }
     }
+
 }

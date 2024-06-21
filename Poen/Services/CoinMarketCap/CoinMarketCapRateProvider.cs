@@ -1,10 +1,13 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Poen.Config;
 using Poen.Models;
 using Poen.Services.ConversionRates;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Web;
+using Poen.Services;
 
 namespace Poen.Services.CoinMarketCap
 {
@@ -13,10 +16,13 @@ namespace Poen.Services.CoinMarketCap
         private readonly HttpClient _httpClient;
         private readonly CoinMarketCapConfig _config;
         private DateTime lastFetched = DateTime.MinValue;
-        public CoinMarketCapRateProvider(HttpClient httpClient, IOptions<CoinMarketCapConfig> config)
+        private readonly ILogger<CoinMarketCapRateProvider> _logger;
+
+        public CoinMarketCapRateProvider(HttpClient httpClient, IOptions<CoinMarketCapConfig> config, ILogger<CoinMarketCapRateProvider> logger)
         {
             _httpClient = httpClient;
             _config = config.Value;
+            _logger = logger;
         }
 
         public async Task UpdateConversionRates(List<ConversionRate> rates)
@@ -25,7 +31,8 @@ namespace Poen.Services.CoinMarketCap
                 return;
 
             var response = await RequestData(rates);
-
+            DateTime dateTime = DateTime.Now;
+            var logBuilder = new StringBuilder();
             foreach (var rate in rates)
             {
                 var coinData = (response?.Data?.FirstOrDefault(a => a.Key == rate.FromToken.Symbol))?.Value;
@@ -37,10 +44,17 @@ namespace Poen.Services.CoinMarketCap
                 if (quote?.Price == null)
                     continue;
 
-                rate.LastUpdated = DateTime.UtcNow;
+                rate.LastUpdated = dateTime;
                 rate.Price = quote.Price;
+
+                if(rate.ToToken.Symbol == "USD")
+                    logBuilder.Append($"{rate.FromToken.Symbol} (${rate.Price.Value.ToStringSI()}), ");
+                else
+                    logBuilder.Append($"{rate.FromToken.Symbol} ({rate.Price.Value.ToStringSI()} {rate.ToToken}), ");
             }
 
+            string logMessage = logBuilder.ToString().TrimEnd(' ', ','); // Trim trailing comma and space
+            _logger.LogInformation("Updated rates: {Rates}", logMessage);
             lastFetched = DateTime.Now;
         }
 

@@ -1,6 +1,7 @@
 ﻿using InfluxDB.Client;
 using Microsoft.Extensions.Options;
 using Poen.Config;
+using System.Runtime.CompilerServices;
 
 
 
@@ -54,7 +55,6 @@ namespace Poen.Services
         public required string Bucket { get; set; }
         public required string Organisation { get; set; }
     }
-
 }
 
 

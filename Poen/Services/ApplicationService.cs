@@ -2,11 +2,15 @@
 using InfluxDB.Client.Writes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Poen.Config;
 using Poen.Models;
+using Poen.Services.CoinMarketCap;
 using Poen.Services.ConversionRates;
 using Poen.Services.Transactions;
+using System;
+using System.Text;
 
 namespace Poen.Services
 {
@@ -17,14 +21,16 @@ namespace Poen.Services
         private readonly ConversionRateService _conversionRateService;
         private readonly InfluxDBService _influxDBService;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<ApplicationService> _logger;
 
-        public ApplicationService(TransactionService transactionService, ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration, IOptions<ApplicationConfig> applicationConfig)
+        public ApplicationService(TransactionService transactionService, ConversionRateService conversionRateService, InfluxDBService influxDBService, IConfiguration configuration, IOptions<ApplicationConfig> applicationConfig, ILogger<ApplicationService> logger)
         {
             _transactionService = transactionService;
             _conversionRateService = conversionRateService;
             _influxDBService = influxDBService;
             _configuration = configuration;
             _applicationConfig = applicationConfig.Value;
+            _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,15 +48,16 @@ namespace Poen.Services
 
         void PrintConfig()
         {
-            Console.WriteLine("Configuration Settings:");
-            Console.WriteLine("-----------------------");
+            StringBuilder logMessage = new StringBuilder();
+            logMessage.AppendLine("Configuration Settings:");
+            logMessage.AppendLine("-----------------------");
 
             foreach (var kvp in _configuration.AsEnumerable())
             {
-                Console.WriteLine($"{kvp.Key}: {kvp.Value}");
+                logMessage.AppendLine($"{kvp.Key}: {kvp.Value}");
             }
 
-            Console.WriteLine();
+            _logger.LogInformation(logMessage.ToString());
         }
 
         private async Task HandleWalletBsc(string wallet)
@@ -65,21 +72,13 @@ namespace Poen.Services
             var usdToken = new Token { Contract = "", Name = "Dollar", Symbol = "USD" };
             var rates = await GetRatesForPortofolio(portofolio, usdToken);
 
-            Console.WriteLine("Token Balances:");
-            Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20} {3,20}", "Token Name", "Symbol", "Balance", "Usd"));
-            Console.WriteLine(new string('-', 90)); // Adjusted separator line length for better formatting
-
+            var logBuilder = new StringBuilder();
+            var timestamp = DateTime.UtcNow;
             foreach (var balance in portofolio.OrderBy(a => a.Token.Symbol))
             {
                 var rate = rates.FirstOrDefault(r => r.FromToken == balance.Token && r.ToToken == usdToken);
                 decimal? usdValue = rate?.Price == null ? null : rate.Price * balance.Value;
                 var usdValueString = usdValue.HasValue ? usdValue.Value.ToString("N4") : " ";
-
-                Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20:N4} {3,20:N4}",
-                    ClipString(balance.Token.Name, nameMaxLength),
-                    ClipString(balance.Token.Symbol, symbolMaxLength),
-                    balance.Value,
-                    usdValueString));
 
                 totalUsd += usdValue ?? 0;
 
@@ -93,33 +92,22 @@ namespace Poen.Services
                         .Tag("TokenContract", balance.Token.Contract)
                         .Field("Value", balance.Value)
                         .Field("Usd", usdValue)
-                        .Timestamp(DateTime.UtcNow, WritePrecision.Ns);
+                        .Timestamp(timestamp, WritePrecision.Ns);
 
                     details.Api.WritePoint(point, details.Bucket, details.Organisation);
                 });
+
+                logBuilder.Append($"{balance.Token.Symbol} (${usdValue?.ToStringSI()}), ");
             }
 
-            Console.WriteLine("");
-            Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20:N4} {3,20:N4}",
-                "",
-                "",
-                "",
-                totalUsd));
-            Console.WriteLine("");
-            return;
+            logBuilder.Append($"Total (${totalUsd.ToStringSI()})");
 
-            Console.WriteLine("\nTransactions:");
-            Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20}", "Token Name", "Symbol", "Amount"));
-            Console.WriteLine(new string('-', 70)); // Adjusted separator line length for better formatting
+            _logger.LogInformation(logBuilder.ToString());
 
-            foreach (var tx in transactions)
-            {
-                Console.WriteLine(string.Format("{0,-30} {1,-20} {2,20:N4}",
-                    ClipString(tx.Token.Name, nameMaxLength),
-                    ClipString(tx.Token.Symbol, symbolMaxLength),
-                    tx.Value));
-            }
         }
+
+
+
 
         private string ClipString(string input, int maxLength)
         {
